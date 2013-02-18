@@ -35,10 +35,10 @@ open(DbName, DDocId) when is_binary(DDocId) ->
 open(Key) ->
     try ets_lru:lookup_d(?CACHE, Key) of
         {ok, _} = Resp ->
-            margaret_counter:increment([ddoc_cache, hit]),
+            folsom_metrics:notify([dbcore, ddoc_cache, hit], {inc, 1}),
             Resp;
         _ ->
-            margaret_counter:increment([ddoc_cache, miss]),
+            folsom_metrics:notify([dbcore, ddoc_cache, miss], {inc, 1}),
             case gen_server:call(?OPENER, {open, Key}, infinity) of
                 {open_ok, Resp} ->
                     Resp;
@@ -51,7 +51,7 @@ open(Key) ->
             end
     catch
         error:badarg ->
-            margaret_counter:increment([ddoc_cache, recovery]),
+            folsom_metrics:notify([dbcore, ddoc_cache, recovery], {inc, 1}),
             recover(Key)
     end.
 

@@ -15,6 +15,9 @@ start_link() ->
 
 
 init([]) ->
+    folsom_metrics:new_counter([dbcore, ddoc_cache, hit]),
+    folsom_metrics:new_counter([dbcore, ddoc_cache, miss]),
+    folsom_metrics:new_counter([dbcore, ddoc_cache, recovery]),
     Children = [
         {
             ddoc_cache_lru,

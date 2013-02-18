@@ -15,7 +15,8 @@
         ets_lru,
         mem3,
         fabric,
-        twig
+        twig,
+        folsom
     ]},
     {mod, {ddoc_cache_app, []}},
     {env, [
