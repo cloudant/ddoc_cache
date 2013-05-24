@@ -119,7 +119,7 @@ handle_cast(Msg, St) ->
 
 handle_info({'EXIT', Pid, Reason}, #st{evictor=Pid}=St) ->
     twig:log(err, "ddoc_cache_opener evictor died ~w", [Reason]),
-    {ok, Evictor} = couch_event:link_listener(?MODULE, evictor, nil, [all_dbs]),
+    {ok, Evictor} = couch_event:link_listener(?MODULE, handle_db_event, nil, [all_dbs]),
     {noreply, St#st{evictor=Evictor}};
 
 handle_info({'EXIT', _Pid, {open_ok, Key, Resp}}, St) ->
