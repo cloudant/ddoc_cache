@@ -27,13 +27,13 @@ open_doc(DbName, DocId) ->
     Key = {DbName, DocId, '_'},
     case ddoc_cache_opener:match_newest(Key) of
         {ok, _} = Resp ->
-            margaret_counter:increment([ddoc_cache, hit]),
+            couch_stats:increment_counter([ddoc_cache, hit]),
             Resp;
         missing ->
-            margaret_counter:increment([ddoc_cache, miss]),
+            couch_stats:increment_counter([ddoc_cache, miss]),
             ddoc_cache_opener:open_doc(DbName, DocId);
         recover ->
-            margaret_counter:increment([ddoc_cache, recovery]),
+            couch_stats:increment_counter([ddoc_cache, recovery]),
             ddoc_cache_opener:recover_doc(DbName, DocId)
     end.
 
@@ -41,13 +41,13 @@ open_doc(DbName, DocId, RevId) ->
     Key = {DbName, DocId, RevId},
     case ddoc_cache_opener:lookup(Key) of
         {ok, _} = Resp ->
-            margaret_counter:increment([ddoc_cache, hit]),
+            couch_stats:increment_counter([ddoc_cache, hit]),
             Resp;
         missing ->
-            margaret_counter:increment([ddoc_cache, miss]),
+            couch_stats:increment_counter([ddoc_cache, miss]),
             ddoc_cache_opener:open_doc(DbName, DocId, RevId);
         recover ->
-            margaret_counter:increment([ddoc_cache, recovery]),
+            couch_stats:increment_counter([ddoc_cache, recovery]),
             ddoc_cache_opener:recover_doc(DbName, DocId, RevId)
     end.
 
@@ -55,13 +55,13 @@ open_validation_funs(DbName) ->
     Key = {DbName, validation_funs},
     case ddoc_cache_opener:lookup(Key) of
         {ok, _} = Resp ->
-            margaret_counter:increment([ddoc_cache, hit]),
+            couch_stats:increment_counter([ddoc_cache, hit]),
             Resp;
         missing ->
-            margaret_counter:increment([ddoc_cache, miss]),
+            couch_stats:increment_counter([ddoc_cache, miss]),
             ddoc_cache_opener:open_validation_funs(DbName);
         recover ->
-            margaret_counter:increment([ddoc_cache, recovery]),
+            couch_stats:increment_counter([ddoc_cache, recovery]),
             ddoc_cache_opener:recover_validation_funs(DbName)
     end.
 
