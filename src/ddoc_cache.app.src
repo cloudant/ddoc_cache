@@ -12,6 +12,7 @@
         stdlib,
         crypto,
         couch_event,
+        couch_stats,
         ets_lru,
         mem3,
         fabric,
