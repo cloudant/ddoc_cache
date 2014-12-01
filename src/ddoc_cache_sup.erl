@@ -25,6 +25,14 @@ init([]) ->
             [ets_lru]
         },
         {
+            ddoc_cache_fetcher_sup,
+            {ddoc_cache_fetcher_sup, start_link, [ddoc_cache_fetcher]},
+            permanent,
+            5000,
+            supervisor,
+            [ddoc_cache_fetcher_sup]
+        },
+        {
             ddoc_cache_opener,
             {ddoc_cache_opener, start_link, []},
             permanent,
