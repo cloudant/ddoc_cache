@@ -37,21 +37,21 @@ init([]) ->
 
 
 lru_opts() ->
-    case application:get_env(ddoc_cache, max_objects) of
-        {ok, MxObjs} when is_integer(MxObjs), MxObjs > 0 ->
-            [{max_objects, MxObjs}];
-        _ ->
-            []
-    end ++
-    case application:get_env(ddoc_cache, max_size) of
-        {ok, MxSize} when is_integer(MxSize), MxSize > 0 ->
-            [{max_size, MxSize}];
-        _ ->
-            []
-    end ++
-    case application:get_env(ddoc_cache, max_lifetime) of
-        {ok, MxLT} when is_integer(MxLT), MxLT > 0 ->
-            [{max_lifetime, MxLT}];
-        _ ->
-            []
+    lists:append([
+        lru_opts(max_objects),
+        lru_opts(max_size),
+        lru_opts(max_lifetime)
+    ]).
+
+lru_opts(max_objects) ->
+    lru_opts(max_objects, config:get("ddoc_cache", "max_objects", "-1"));
+lru_opts(max_size) ->
+    lru_opts(max_size, config:get("ddoc_cache", "max_size", "104857600"));
+lru_opts(max_lifetime) ->
+    lru_opts(max_lifetime, config:get("ddoc_cache", "max_lifetime", "-1")).
+
+lru_opts(Key, String) ->
+    case list_to_integer(String) of
+    Num when Num > 0 -> [{Key, Num}];
+    _ -> []
     end.
