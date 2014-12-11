@@ -24,6 +24,7 @@
 -export([
     open_doc/2,
     open_doc/3,
+    open_mango/1,
     open_validation_funs/1,
     evict_docs/2,
     lookup/1,
@@ -76,6 +77,11 @@ open_validation_funs(DbName) ->
     Resp = gen_server:call(?MODULE, {open, {DbName, validation_funs}}, infinity),
     handle_open_response(Resp).
 
+-spec open_mango(dbname()) -> {ok, [tuple()]}.
+open_mango(DbName) ->
+    Resp = gen_server:call(?MODULE, {open, {DbName, mango}}, infinity),
+    handle_open_response(Resp).
+
 -spec evict_docs(dbname(), [docid()]) -> ok.
 evict_docs(DbName, DocIds) ->
     gen_server:cast(?MODULE, {evict, DbName, DocIds}).
@@ -122,6 +128,9 @@ recover_validation_funs(DbName) ->
         end
     end, DDocs),
     {ok, Funs}.
+
+recover_mango(DbName) ->
+    {ok, mango_idx:from_disk(DbName)}.
 
 handle_db_event(ShardDbName, created, St) ->
     gen_server:cast(?MODULE, {evict, mem3:dbname(ShardDbName)}),
@@ -178,6 +187,7 @@ handle_cast({do_evict, DbName}, St) ->
 
 handle_cast({do_evict, DbName, DDocIds}, St) ->
     ets_lru:remove(?CACHE, {DbName, validation_funs}),
+    ets_lru:remove(?CACHE, {DbName, mango}),
     lists:foreach(fun(DDocId) ->
         Revs = ets_lru:match(?CACHE, {DbName, DDocId, '$1'}, '_'),
         lists:foreach(fun([Rev]) ->
@@ -220,12 +230,17 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 -spec fetch_doc_data({dbname(), validation_funs}) -> no_return();
+                    ({dbname(), mango}) -> no_return();
                     ({dbname(), docid()}) -> no_return();
                     ({dbname(), docid(), revision()}) -> no_return().
 fetch_doc_data({DbName, validation_funs}=OpenerKey) ->
     {ok, Funs} = recover_validation_funs(DbName),
     ok = ets_lru:insert(?CACHE, OpenerKey, Funs),
     exit({open_ok, OpenerKey, {ok, Funs}});
+fetch_doc_data({DbName, mango}=OpenerKey) ->
+    {ok, Indexes} = recover_mango(DbName),
+    ok = ets_lru:insert(?CACHE, OpenerKey, Indexes),
+    exit({open_ok, OpenerKey, {ok, Indexes}});
 fetch_doc_data({DbName, DocId}=OpenerKey) ->
     try recover_doc(DbName, DocId) of
         {ok, Doc} ->
