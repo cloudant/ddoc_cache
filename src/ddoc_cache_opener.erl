@@ -2,7 +2,7 @@
 
 -module(ddoc_cache_opener).
 -behaviour(gen_server).
--vsn(1).
+-vsn(2).
 
 -include_lib("couch/include/couch_db.hrl").
 -include_lib("mem3/include/mem3.hrl").

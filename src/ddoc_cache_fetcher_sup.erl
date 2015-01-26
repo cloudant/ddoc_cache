@@ -24,14 +24,11 @@ start_link(Args) ->
 %% @doc - Starts a child with given Id and MFArgs
 -spec start_child(term()) -> {ok, pid()} | {ok, 'ignore'} | {error, term()}.
 start_child(ChildId) ->
-    try ets:lookup(?MODULE, ChildId) of
-        [] ->
-            gen_server:call(?MODULE, {start_child, ChildId}, ?TIMEOUT);
-        [#entry{key = ChildId, pid = Pid}] ->
-            {ok, Pid}
-    catch
-        error:badarg ->
-            {error, {?MODULE, not_running}}
+    case get_child(ChildId) of
+    not_found ->
+        gen_server:call(?MODULE, {start_child, ChildId}, ?TIMEOUT);
+    Else ->
+        Else
     end.
 
 %% @doc - Get a pid of a child with a given Id
