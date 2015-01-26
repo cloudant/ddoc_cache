@@ -3,7 +3,6 @@
 -module(ddoc_cache_fetcher_sup).
 
 -behaviour(gen_server).
--include_lib("stdlib/include/ms_transform.hrl").
 
 -export([start_link/1, start_child/1, get_child/1, terminate_child/1,
     which_children/0, count_children/0, get_revision/1, set_revision/2]).
@@ -57,8 +56,6 @@ terminate_child(ChildId) ->
 %% @doc - Returns a list of key, pid pairs for all active children
 -spec which_children() -> [{term(), pid()}].
 which_children() ->
-    %% Match = ets:fun2ms(fun(#entry{key = Key, pid = Pid}) -> {Key, Pid} end),
-    %% io:format(">> ~p <<", [Match]),
     Match = [{{entry,'$1','$2','_'},[],[{{'$1','$2'}}]}],
     try ets:select(?MODULE, Match) of
         Result -> Result
