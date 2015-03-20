@@ -90,13 +90,8 @@ get_revision(Key) ->
 
 init(Module) ->
     process_flag(trap_exit, true),
-    case ets:info(?MODULE) of
-    undefined ->
-        Idx = ets:new(?MODULE, [named_table, public, {keypos, #entry.key}]),
-        {ok, #state{worker = Module, index = Idx}};
-    _ ->
-        {stop, ets_already_started}
-    end.
+    Idx = ets:new(?MODULE, [named_table, public, {keypos, #entry.key}]),
+    {ok, #state{worker = Module, index = Idx}}.
 
 handle_call({start_child, ChildId}, _From, State) ->
     #state{worker = Module, index = Idx} = State,

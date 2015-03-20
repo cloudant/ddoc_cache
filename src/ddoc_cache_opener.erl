@@ -107,7 +107,7 @@ match_newest(Key) ->
     {not_found, missing | deleted} |
     {timeout, any()} |
     {error, any()} |
-    {error, any() | any()}.
+    {error, any(), any()}.
 recover_doc(DbName, DDocId) ->
     fabric:open_doc(DbName, DDocId, []).
 
@@ -117,7 +117,7 @@ recover_doc(DbName, DDocId) ->
     {not_found, missing | deleted} |
     {timeout, any()} |
     {error, any()} |
-    {error, any() | any()}.
+    {error, any(), any()}.
 recover_doc(DbName, DDocId, Rev) ->
     {ok, [Resp]} = fabric:open_revs(DbName, DDocId, [Rev], []),
     Resp.
@@ -128,7 +128,7 @@ recover_doc(DbName, DDocId, Rev) ->
     {not_found, missing} |
     {timeout, any()} |
     {error, any()} |
-    {error, any() | any()}.
+    {error, any(), any()}.
 recover_doc_info(DbName, DDocId) ->
     fabric:get_doc_info(DbName, DDocId, [{r, "1"}]).
 
@@ -206,12 +206,6 @@ handle_cast({do_evict, DbName, DDocIds}, St) ->
 
 handle_cast(Msg, St) ->
     {stop, {invalid_cast, Msg}, St}.
-
-handle_info({'EXIT', _Pid, {open_ok, _, _}}, St) ->
-    {noreply, St};
-
-handle_info({'EXIT', _Pid, {open_error, _, _, _}}, St) ->
-    {noreply, St};
 
 handle_info({'EXIT', Pid, Reason}, #st{evictor=Pid}=St) ->
     twig:log(err, "ddoc_cache_opener evictor died ~w", [Reason]),
