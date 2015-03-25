@@ -20,7 +20,7 @@ main_test_() ->
     }}.
 
 setup() ->
-    {ok, _SupPid} = ddoc_cache_fetcher_sup:start_link(ddoc_cache_fetcher),
+    {ok, _SupPid} = ddoc_cache_fetcher_sup:start_link(),
     {ok, OpenerPid} = ddoc_cache_opener:start_link(),
     StashPid = spawn(?MODULE, stash, [#ctx{}]),
     meck:new([ets_lru, mem3, fabric]),
@@ -81,7 +81,8 @@ assertFetcherQueueDry() ->
     ?assertEqual(Count, 1),
     %% get fetcher's pid
     Key = {<<"one">>, <<"ddoc">>},
-    {ok, Pid} = ddoc_cache_fetcher_sup:start_child(Key),
+    ChildSpec = {Key, ddoc_cache_fetcher, [Key]},
+    {ok, Pid} = ddoc_cache_fetcher_sup:start_child(ChildSpec),
     ?debugVal(Pid),
     ?assert(is_process_alive(Pid)),
     {_, Q} = process_info(Pid, message_queue_len),

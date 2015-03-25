@@ -26,7 +26,7 @@ init([]) ->
         },
         {
             ddoc_cache_fetcher_sup,
-            {ddoc_cache_fetcher_sup, start_link, [ddoc_cache_fetcher]},
+            {ddoc_cache_fetcher_sup, start_link, []},
             permanent,
             5000,
             supervisor,

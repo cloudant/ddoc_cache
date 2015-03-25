@@ -24,12 +24,17 @@ stop() ->
     application:stop(ddoc_cache).
 
 open_doc(DbName, DocId) ->
-    case ddoc_cache_fetcher_sup:get_revision({DbName, DocId}) of
-    {ok, RevId} ->
-        ddoc_cache:open_doc(DbName, DocId, RevId);
-    not_found ->
-        couch_stats:increment_counter([ddoc_cache, miss]),
-        ddoc_cache_opener:open_doc(DbName, DocId)
+    Key = {DbName, DocId},
+    case ddoc_cache_opener:lookup(Key) of
+        {ok, _} = Resp ->
+            couch_stats:increment_counter([ddoc_cache, hit]),
+            Resp;
+        missing ->
+            couch_stats:increment_counter([ddoc_cache, miss]),
+            ddoc_cache_opener:open_doc(DbName, DocId);
+        recover ->
+            couch_stats:increment_counter([ddoc_cache, recovery]),
+            ddoc_cache_opener:recover_doc(DbName, DocId)
     end.
 
 open_doc(DbName, DocId, RevId) ->
@@ -68,7 +73,7 @@ open_custom(DbName, Mod) ->
             Resp;
         missing ->
             couch_stats:increment_counter([ddoc_cache, miss]),
-            ddoc_cache_opener:open_doc(DbName, Mod);
+            ddoc_cache_opener:open_custom(DbName, Mod);
         recover ->
             couch_stats:increment_counter([ddoc_cache, recovery]),
             Mod:recover(DbName)

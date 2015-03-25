@@ -26,7 +26,7 @@ setup() ->
     Pid.
 
 init([]) ->
-    Children = [{dummy_sup, {ddoc_cache_fetcher_sup, start_link, [dummy]},
+    Children = [{dummy_sup, {ddoc_cache_fetcher_sup, start_link, []},
         transient, 50, supervisor, [ddoc_cache_fetcher_sup]}],
     {ok, {{one_for_one, 1, 5}, Children}}.
 
@@ -53,21 +53,23 @@ test_run(Pid) ->
     ].
 
 start_child() ->
-    {ok, Pid} = ddoc_cache_fetcher_sup:start_child(dummy),
-    RegPid = whereis(dummy),
+    ChildSpec = {dummy_key, dummy, [dummy_key]},
+    {ok, Pid} = ddoc_cache_fetcher_sup:start_child(ChildSpec),
+    RegPid = whereis(dummy_key),
     ?assertEqual(Pid, RegPid),
     ?assert(is_process_alive(Pid)).
 
 find_child() ->
-    RegPid = whereis(dummy),
-    {ok, Pid} = ddoc_cache_fetcher_sup:start_child(dummy),
+    RegPid = whereis(dummy_key),
+    ChildSpec = {dummy_key, dummy, [dummy_key]},
+    {ok, Pid} = ddoc_cache_fetcher_sup:start_child(ChildSpec),
     ?assertEqual(Pid, RegPid),
     ?assertEqual(1, ddoc_cache_fetcher_sup:count_children()).
 
 quit_child() ->
-    Pid = whereis(dummy),
+    Pid = whereis(dummy_key),
     Ref = erlang:monitor(process, Pid),
-    gen_server:call(dummy, {delay, 0}),
+    gen_server:call(dummy_key, {delay, 0}),
     receive {'DOWN',Ref,process,_,Reason} -> ?assertEqual(Reason, normal)
     end,
     erlang:demonitor(Ref, [flush]),
@@ -76,9 +78,9 @@ quit_child() ->
     ?assertEqual(0, ddoc_cache_fetcher_sup:count_children()).
 
 terminate_child() ->
-    Pid = whereis(dummy),
+    Pid = whereis(dummy_key),
     Ref = erlang:monitor(process, Pid),
-    ok = ddoc_cache_fetcher_sup:terminate_child(dummy),
+    ok = ddoc_cache_fetcher_sup:terminate_child(dummy_key),
     receive {'DOWN',Ref,process,_,Reason} -> ?assertEqual(Reason, shutdown)
     end,
     erlang:demonitor(Ref, [flush]),
@@ -88,16 +90,17 @@ terminate_child() ->
 
 explode_child() ->
     start_child(),
-    Pid = whereis(dummy),
-    ?assertExit({{crowbar, _}, _}, gen_server:call(dummy, crash)),
+    Pid = whereis(dummy_key),
+    ?assertExit({{crowbar, _}, _}, gen_server:call(dummy_key, crash)),
     timer:sleep(5),
     ?assertNot(is_process_alive(Pid)),
     ?assertEqual(0, ddoc_cache_fetcher_sup:count_children()).
 
 start_children() ->
     lists:foreach(fun(I) ->
-        N = list_to_atom("dummy" ++ integer_to_list(I)),
-        {ok, Pid} = ddoc_cache_fetcher_sup:start_child(N),
+        Key = list_to_atom("dummy" ++ integer_to_list(I)),
+        ChildSpec = {Key, dummy, [Key]},
+        {ok, Pid} = ddoc_cache_fetcher_sup:start_child(ChildSpec),
         ?assert(is_pid(Pid))
     end, lists:seq(1,9)),
     ?assertEqual(9, ddoc_cache_fetcher_sup:count_children()).

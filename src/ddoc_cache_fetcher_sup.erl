@@ -4,8 +4,8 @@
 
 -behaviour(gen_server).
 
--export([start_link/1, start_child/1, get_child/1, terminate_child/1,
-    which_children/0, count_children/0, get_revision/1, set_revision/2]).
+-export([start_link/0, start_child/1, get_child/1, terminate_child/1,
+    which_children/0, count_children/0]).
 %% gen_server's callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     terminate/2, code_change/3]).
@@ -13,19 +13,20 @@
 -define(TIMEOUT, 10000).
 -define(WAIT, 5000).
 
--record(entry, {key, pid, rev}).
--record(state, {worker, index}).
+-record(entry, {key, pid}).
+-record(state, {index}).
 
--spec start_link(atom()) -> {ok, pid()} | {error, term()}.
-start_link(Args) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
+-spec start_link() -> {ok, pid()} | {error, term()}.
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-%% @doc - Starts a child with given Id and MFArgs
+%% @doc - Starts a child with given Id and Module, Args
 -spec start_child(term()) -> {ok, pid()} | {ok, 'ignore'} | {error, term()}.
-start_child(ChildId) ->
+start_child({ChildId, Module, Args}) ->
     case get_child(ChildId) of
     not_found ->
-        gen_server:call(?MODULE, {start_child, ChildId}, ?TIMEOUT);
+        ChildSpec = {start_child, ChildId, Module, Args},
+        gen_server:call(?MODULE, ChildSpec, ?TIMEOUT);
     Else ->
         Else
     end.
@@ -56,7 +57,7 @@ terminate_child(ChildId) ->
 %% @doc - Returns a list of key, pid pairs for all active children
 -spec which_children() -> [{term(), pid()}].
 which_children() ->
-    Match = [{{entry,'$1','$2','_'},[],[{{'$1','$2'}}]}],
+    Match = [{{entry,'$1','$2'},[],[{{'$1','$2'}}]}],
     try ets:select(?MODULE, Match) of
         Result -> Result
     catch
@@ -71,33 +72,17 @@ count_children() ->
     N -> N
     end.
 
-set_revision(Key, Rev) ->
-    try ets:update_element(?MODULE, Key, {#entry.rev, Rev}) of
-        true -> ok;
-        false -> not_found
-    catch
-        error:badarg -> {error, {?MODULE, not_running}}
-    end.
 
-get_revision(Key) ->
-    try ets:lookup(?MODULE, Key) of
-        [#entry{key = Key, rev = Rev}] -> {ok, Rev};
-        [] -> not_found
-    catch
-        error:badarg -> {error, {?MODULE, not_running}}
-    end.
-
-
-init(Module) ->
+init([]) ->
     process_flag(trap_exit, true),
     Idx = ets:new(?MODULE, [named_table, public, {keypos, #entry.key}]),
-    {ok, #state{worker = Module, index = Idx}}.
+    {ok, #state{index = Idx}}.
 
-handle_call({start_child, ChildId}, _From, State) ->
-    #state{worker = Module, index = Idx} = State,
+handle_call({start_child, ChildId, Module, Args}, _From, State) ->
+    #state{index = Idx} = State,
     case ets:lookup(Idx, ChildId) of
     [] ->
-        ChildSpec = {ChildId, {Module, start_link, [ChildId]}},
+        ChildSpec = {ChildId, {Module, start_link, Args}},
         Reply = create_child(Idx, ChildSpec),
         {reply, Reply, State};
     [#entry{key = ChildId, pid = Pid}] ->

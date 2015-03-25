@@ -40,6 +40,9 @@ common_setup() ->
     meck:expect(ets_lru, insert, fun(_, _, _) -> ok end),
     meck:expect(ets_lru, match, fun(_, _, _) -> [] end),
     meck:expect(mem3, nodes, fun() -> [node()] end),
+    meck:expect(ddoc_cache_fetcher_sup, start_child, fun({K, _, _}) ->
+        {ok, K}
+    end),
     {ok, Doc}.
 
 ok_setup() ->
@@ -74,6 +77,9 @@ batch_setup() ->
 
 fail_setup() ->
     {ok, Doc} = common_setup(),
+    meck:expect(ddoc_cache_fetcher_sup, terminate_child, fun(_) ->
+        ok
+    end),
     #cfg{doc = Doc}.
 
 ok_teardown(_Cfg) ->
@@ -88,7 +94,7 @@ fail_teardown(Cfg) ->
     ok_teardown(Cfg).
 
 ok_run(#cfg{pid = Pid, doc = Doc}) ->
-    {Time, Rsp} = timer:tc(ddoc_cache_fetcher, open, [Pid]),
+    {Time, Rsp} = timer:tc(gen_server, call, [Pid, open]),
     [
         {"A call waited for a response", ?_assert(Time >= ?FABRIC_DELAY)},
         {"Got a proper response", ?_assertEqual(Rsp, {ok, Doc})},
@@ -124,7 +130,7 @@ fail_run(_Cfg) ->
         end),
         {ok, Pid} = gen_server:start(ddoc_cache_fetcher, {"db", "doc"}, []),
         ?assert(is_process_alive(Pid)),
-        ?assertExit({{error,fabric},_}, gen_server:call(Pid, open)),
+        ?assertExit({fabric,_}, gen_server:call(Pid, open)),
         ?assertNot(is_process_alive(Pid))
     end,
     DoExit = fun() ->
@@ -134,7 +140,7 @@ fail_run(_Cfg) ->
         end),
         {ok, Pid} = gen_server:start(ddoc_cache_fetcher, {"db", "doc"}, []),
         ?assert(is_process_alive(Pid)),
-        ?assertExit({{error,fabric},_}, gen_server:call(Pid, open)),
+        ?assertExit({fabric,_}, gen_server:call(Pid, open)),
         ?assertNot(is_process_alive(Pid))
     end,
     DoError = fun() ->
@@ -144,7 +150,7 @@ fail_run(_Cfg) ->
         end),
         {ok, Pid} = gen_server:start(ddoc_cache_fetcher, {"db", "doc"}, []),
         ?assert(is_process_alive(Pid)),
-        ?assertExit({{error,fabric},_}, gen_server:call(Pid, open)),
+        ?assertExit({fabric,_}, gen_server:call(Pid, open)),
         ?assertNot(is_process_alive(Pid))
     end,
     [
