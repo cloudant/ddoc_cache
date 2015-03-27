@@ -29,7 +29,8 @@
     open_custom/2,
     evict_docs/2,
     lookup/1,
-    match_newest/1,
+    member/1,
+    store_doc/2,
     recover_doc/2,
     recover_doc/3,
     recover_doc_info/2,
@@ -85,21 +86,13 @@ lookup(Key) ->
             recover
     end.
 
--spec match_newest(doc_key()) -> {ok, #doc{}} | missing | recover.
-match_newest(Key) ->
-    try ets_lru:match_object(?CACHE, Key, '_') of
-        [] ->
-            missing;
-        Docs ->
-            Sorted = lists:sort(
-                fun (#doc{deleted=DelL, revs=L}, #doc{deleted=DelR, revs=R}) ->
-                    {not DelL, L} > {not DelR, R}
-                end, Docs),
-            {ok, hd(Sorted)}
-    catch
-        error:badarg ->
-            recover
-    end.
+-spec member(doc_key()) -> boolean().
+member(Key) ->
+    ets_lru:member(?CACHE, Key).
+
+-spec store_doc(doc_key(), term()) -> ok.
+store_doc(Key, Doc) ->
+    ok = ets_lru:insert(?CACHE, Key, Doc).
 
 %% @doc Returns the latest version of design doc
 -spec recover_doc(db_name(), doc_id()) ->

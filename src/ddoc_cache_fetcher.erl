@@ -14,7 +14,6 @@
 -include("ddoc_cache.hrl").
 -include_lib("couch/include/couch_db.hrl").
 
--define(CACHE, ddoc_cache_lru).
 -record(state, {key, pid, doc, rev, queue = []}).
 
 
@@ -62,7 +61,7 @@ handle_call(Msg, _, State) ->
 handle_cast({open, To}, #state{queue = Q} = State) ->
     {noreply, State#state{queue = [To|Q]}};
 handle_cast({recover, {ok, Doc}}, #state{key = Key} = State) ->
-    ok = store_ddoc(Key, Doc),
+    ok = ddoc_cache_opener:store_doc(Key, Doc),
     maybe_start_synchronizer(Key, Doc),
     {noreply, State#state{doc = {ok, Doc}}};
 handle_cast({recover, Reply}, State) ->
@@ -111,13 +110,10 @@ recover({DbName, DocId}) ->
 recover({DbName, DocId, Rev}) ->
     ddoc_cache_opener:recover_doc(DbName, DocId, Rev).
 
-store_ddoc(Key, Doc) ->
-    ok = ets_lru:insert(?CACHE, Key, Doc).
-
 maybe_start_synchronizer({DbName, DocId}, Doc) when not is_atom(DocId) ->
     {RevDepth, [RevHash| _]} = Doc#doc.revs,
     Rev = {RevDepth, RevHash},
-    ok = store_ddoc({DbName, DocId, Rev}, Doc),
+    ok = ddoc_cache_opener:store_doc({DbName, DocId, Rev}, Doc),
     {ok, _} = ddoc_cache_synchronizer:start({DbName, DocId}, Rev);
 maybe_start_synchronizer({_, custom, _}, _) ->
     ok;

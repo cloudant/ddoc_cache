@@ -14,7 +14,6 @@
 -include("ddoc_cache.hrl").
 -include_lib("couch/include/couch_db.hrl").
 
--define(CACHE, ddoc_cache_lru).
 -define(REFRESH, 60000).
 -record(state, {key, rev, pid, tref}).
 
@@ -55,7 +54,7 @@ handle_cast(refresh, #state{tref = undefined} = State) ->
     {noreply, State};
 handle_cast(refresh, #state{key = {DbName, DocId}, rev = Rev} = State) ->
     {ok, cancel} = timer:cancel(State#state.tref),
-    case ets_lru:member(?CACHE, {DbName, DocId, Rev}) of
+    case ddoc_cache_opener:member({DbName, DocId, Rev}) of
     true ->
         Self = self(),
         Pid = proc_lib:spawn_link(fun() ->
