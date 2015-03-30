@@ -37,7 +37,7 @@ open(Key) ->
         ddoc_cache_opener:lookup(Key)
     end.
 
--spec open(doc_key(), term()) -> {ok, #doc{}}.
+-spec open(doc_key(), term()) -> {ok, #doc{}} | {error, term()}.
 open(Key, To) ->
     {ok, Pid} = start(Key),
     case erlang:is_process_alive(Pid) of
@@ -110,7 +110,7 @@ recover({DbName, DocId}) ->
 recover({DbName, DocId, Rev}) ->
     ddoc_cache_opener:recover_doc(DbName, DocId, Rev).
 
-maybe_start_synchronizer({DbName, DocId}, Doc) when not is_atom(DocId) ->
+maybe_start_synchronizer({DbName, DocId}, Doc) ->
     {RevDepth, [RevHash| _]} = Doc#doc.revs,
     Rev = {RevDepth, RevHash},
     ok = ddoc_cache_opener:store_doc({DbName, DocId, Rev}, Doc),

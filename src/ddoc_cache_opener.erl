@@ -29,8 +29,11 @@
     open_custom/2,
     evict_docs/2,
     lookup/1,
+    match/1,
     member/1,
     store_doc/2,
+    remove_doc/1,
+    remove_match_docs/1,
     recover_doc/2,
     recover_doc/3,
     recover_doc_info/2,
@@ -40,7 +43,6 @@
     handle_db_event/3
 ]).
 
--define(CACHE, ddoc_cache_lru).
 
 -record(st, {
     limiter,
@@ -61,7 +63,7 @@ open_doc(DbName, DocId, Rev) ->
     ddoc_cache_fetcher:open({DbName, DocId, Rev}).
 
 -spec open_validation_funs(db_name()) ->
-    {ok, [fun()]} | {error, term()}.
+    {ok, [function()]} | {error, term()}.
 open_validation_funs(DbName) ->
     ddoc_cache_fetcher:open({DbName, custom, validation_funs}).
 
@@ -74,25 +76,45 @@ open_custom(DbName, Mod) ->
 evict_docs(DbName, DocIds) ->
     gen_server:cast(?MODULE, {evict, DbName, DocIds}).
 
--spec lookup(doc_key()) -> {ok, #doc{}} | missing | recover.
+-spec lookup(doc_key()) -> {ok, #doc{} | [term()]} | missing | recover.
 lookup(Key) ->
-    try ets_lru:lookup_d(?CACHE, Key) of
-        {ok, _} = Resp ->
-            Resp;
-        _ ->
+    try ets:lookup(?CACHE, Key) of
+        [#entry{key=Key, val=Doc}] ->
+            Update = {#entry.ts, timestamp()},
+            ets:update_element(?CACHE, Key, Update),
+            {ok, Doc};
+        [] ->
             missing
     catch
         error:badarg ->
             recover
     end.
 
+-spec match(atom() | tuple()) -> [term()].
+match(KeyPattern) ->
+    Pattern = #entry{key=KeyPattern, _='_'},
+    lists:flatten(ets:match(?CACHE, Pattern)).
+
 -spec member(doc_key()) -> boolean().
 member(Key) ->
-    ets_lru:member(?CACHE, Key).
+    ets:member(?CACHE, Key).
 
 -spec store_doc(doc_key(), term()) -> ok.
 store_doc(Key, Doc) ->
-    ok = ets_lru:insert(?CACHE, Key, Doc).
+    true = ets:insert(?CACHE, #entry{key=Key, val=Doc, ts=timestamp()}),
+    gen_server:cast(?MODULE, maybe_trim_cache),
+    ok.
+
+-spec remove_doc(doc_key()) -> ok.
+remove_doc(Key) ->
+    true = ets:delete(?CACHE, Key),
+    ok.
+
+-spec remove_match_docs(atom() | tuple()) -> ok.
+remove_match_docs(KeyPattern) ->
+    Pattern = #entry{key=KeyPattern, _='_'},
+    true = ets:match_delete(?CACHE, Pattern),
+    ok.
 
 %% @doc Returns the latest version of design doc
 -spec recover_doc(db_name(), doc_id()) ->
@@ -149,11 +171,10 @@ handle_db_event(_DbName, _Event, St) ->
 
 init(_) ->
     process_flag(trap_exit, true),
-    ets:new(?CACHE, [set, named_table, public, {keypos, #entry.key}]),
     {ok, Evictor} = couch_event:link_listener(
         ?MODULE, handle_db_event, nil, [all_dbs]
     ),
-    {ok, #st{evictor = Evictor}}.
+    {ok, #st{evictor = Evictor, limiter = get_limiter()}}.
 
 terminate(_Reason, St) ->
     case is_pid(St#st.evictor) of
@@ -179,18 +200,25 @@ handle_cast({evict, DbName, DDocIds}, St) ->
     {noreply, St};
 
 handle_cast({do_evict, DbName}, St) ->
-    DDocIds = lists:flatten(ets_lru:match(?CACHE, {DbName, '$1', '_'}, '_')),
-    handle_cast({do_evict, DbName, DDocIds}, St);
+    ?MODULE:remove_match_docs({DbName, '_'}),
+    ?MODULE:remove_match_docs({DbName, '_', '_'}),
+    {noreply, St};
 
 handle_cast({do_evict, DbName, DDocIds}, St) ->
-    CustomKeys = lists:flatten(ets_lru:match(?CACHE, {DbName, '$1'}, '_')),
-    lists:foreach(fun(Mod) ->
-        ddoc_cache_synchronizer:stop({DbName, Mod}),
-        ets_lru:remove(?CACHE, {DbName, Mod})
-    end, CustomKeys),
+    ?MODULE:remove_match_docs({DbName, custom, '_'}),
     lists:foreach(fun(DDocId) ->
-        ddoc_cache_fetcher:start({DbName, DDocId})
+        Key = {DbName, DDocId},
+        ?MODULE:remove_doc(Key)
     end, DDocIds),
+    {noreply, St};
+
+handle_cast(maybe_trim_cache, #st{limiter = Limiter} = St) ->
+    case Limiter() of
+    true ->
+        proc_lib:spawn(fun() -> trim_cache(Limiter) end);
+    false ->
+        ok
+    end,
     {noreply, St};
 
 handle_cast(Msg, St) ->

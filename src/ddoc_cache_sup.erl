@@ -17,12 +17,12 @@ start_link() ->
 init([]) ->
     Children = [
         {
-            ddoc_cache_lru,
-            {ets_lru, start_link, [ddoc_cache_lru, lru_opts()]},
+            ddoc_cache_keeper,
+            {ddoc_cache_keeper, start_link, []},
             permanent,
             5000,
             worker,
-            [ets_lru]
+            [ddoc_cache_keeper]
         },
         {
             ddoc_cache_fetcher_sup,
@@ -42,24 +42,3 @@ init([]) ->
         }
     ],
     {ok, {{one_for_one, 5, 10}, Children}}.
-
-
-lru_opts() ->
-    lists:append([
-        lru_opts(max_objects),
-        lru_opts(max_size),
-        lru_opts(max_lifetime)
-    ]).
-
-lru_opts(max_objects) ->
-    lru_opts(max_objects, config:get("ddoc_cache", "max_objects", "-1"));
-lru_opts(max_size) ->
-    lru_opts(max_size, config:get("ddoc_cache", "max_size", "104857600"));
-lru_opts(max_lifetime) ->
-    lru_opts(max_lifetime, config:get("ddoc_cache", "max_lifetime", "-1")).
-
-lru_opts(Key, String) ->
-    case list_to_integer(String) of
-    Num when Num > 0 -> [{Key, Num}];
-    _ -> []
-    end.

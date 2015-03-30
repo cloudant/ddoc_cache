@@ -2,8 +2,9 @@
 
 -compile([export_all]).
 
-% -define(NODEBUG, true).
--define (FABRIC_DELAY, 200).
+-define(NODEBUG, true).
+-define(FABRIC_DELAY, 200).
+-define(CACHE, ddoc_cache_lru).
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("couch/include/couch_db.hrl").
@@ -31,14 +32,11 @@ fail_test_() ->
     }.
 
 common_setup() ->
+    ets:new(?CACHE, [set, named_table, public, {read_concurrency, true}]),
     Doc = #doc{id = "doc", revs = {1, ["abc"]}},
-    Modules = [ddoc_cache_fetcher_sup,ets_lru, mem3, fabric],
+    Modules = [ddoc_cache_fetcher_sup, mem3, fabric],
     ok = meck:new(Modules),
     true = meck:validate(Modules),
-    meck:expect(ddoc_cache_fetcher_sup, set_revision, fun(_, _) -> ok end),
-    meck:expect(ets_lru, remove, fun(_, _) -> ok end),
-    meck:expect(ets_lru, insert, fun(_, _, _) -> ok end),
-    meck:expect(ets_lru, match, fun(_, _, _) -> [] end),
     meck:expect(mem3, nodes, fun() -> [node()] end),
     meck:expect(ddoc_cache_fetcher_sup, start_child, fun({K, _, _}) ->
         {ok, K}
@@ -83,7 +81,8 @@ fail_setup() ->
     #cfg{doc = Doc}.
 
 ok_teardown(_Cfg) ->
-    Modules = [ddoc_cache_fetcher_sup, ets_lru, mem3, fabric],
+    ets:delete(?CACHE),
+    Modules = [ddoc_cache_fetcher_sup, mem3,fabric],
     meck:unload(Modules).
 
 batch_teardown(#cfg{stash = Pid} = Cfg) ->

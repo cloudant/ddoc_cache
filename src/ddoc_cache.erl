@@ -52,7 +52,7 @@ open_doc(DbName, DocId, RevId) ->
     end.
 
 open_validation_funs(DbName) ->
-    Key = {DbName, validation_funs},
+    Key = {DbName, custom, validation_funs},
     case ddoc_cache_opener:lookup(Key) of
         {ok, _} = Resp ->
             couch_stats:increment_counter([ddoc_cache, hit]),
@@ -66,7 +66,7 @@ open_validation_funs(DbName) ->
     end.
 
 open_custom(DbName, Mod) ->
-    Key = {DbName, Mod},
+    Key = {DbName, custom, Mod},
     case ddoc_cache_opener:lookup(Key) of
         {ok, _} = Resp ->
             couch_stats:increment_counter([ddoc_cache, hit]),

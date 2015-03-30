@@ -18,5 +18,13 @@
 -type doc_hash() :: <<_:128>>.
 -type revision() :: {pos_integer(), doc_hash()}.
 -type doc_key() :: {db_name(), doc_id()}
-    | {db_name(), atom()}
+    | {db_name(), 'custom', atom()}
     | {db_name(), doc_id(), revision()}.
+
+% cache record
+-define(CACHE, ddoc_cache_lru).
+-record(entry, {
+    key :: doc_key() | tuple(),
+    val :: binary() | '_',
+    ts :: pos_integer() | atom() | '_'
+}).
