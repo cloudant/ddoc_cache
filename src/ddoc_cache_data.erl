@@ -47,18 +47,19 @@ lookup(Key) ->
 -spec store(doc_key(), term()) -> ok.
 store(Key, Value) ->
     true = ets:insert(?CACHE, #entry{key=Key, val=Doc}),
-    gen_server:cast(?MODULE, maybe_trim_cache),
     ok.
 
 
--spec remove(doc_key()) -> true.
+-spec remove(doc_key()) -> ok.
 remove(Key) ->
-    true = ets:delete(?CACHE, Key).
+    true = ets:delete(?CACHE, Key),
+    ok.
 
 
--spec remove_matches(doc_key()) -> true.
+-spec remove_matches(doc_key()) -> ok.
 remove_matches(KeyPattern) ->
-    true = ets:match_delete(?CACHE, #entry{key=KeyPattern, _='_'}).
+    true = ets:match_delete(?CACHE, #entry{key=KeyPattern, _='_'}),
+    ok.
 
 
 -spec member(doc_key()) -> boolean().
@@ -75,8 +76,10 @@ init([]) ->
     ets:new(?CACHE, [set, named_table, public, {keypos, #entry.key}]),
     {ok, ok, hibernate}.
 
+
 terminate(_Reason, _State) ->
-    ets:delete(?CACHE).
+    true = ets:delete(?CACHE),
+    ok.
 
 
 handle_call(_, _, State) ->
