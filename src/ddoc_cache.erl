@@ -27,63 +27,19 @@ stop() ->
 
 
 open_doc(DbName, DocId) ->
-    Key = {DbName, DocId},
-    case ddoc_cache_opener:lookup(Key) of
-        {ok, _} = Resp ->
-            couch_stats:increment_counter([ddoc_cache, hit]),
-            Resp;
-        missing ->
-            couch_stats:increment_counter([ddoc_cache, miss]),
-            ddoc_cache_opener:open_doc(DbName, DocId);
-        recover ->
-            couch_stats:increment_counter([ddoc_cache, recovery]),
-            ddoc_cache_opener:recover_doc(DbName, DocId)
-    end.
+    ddoc_cache_entry:get({DbName, DocId}).
 
 
 open_doc(DbName, DocId, RevId) ->
-    Key = {DbName, DocId, RevId},
-    case ddoc_cache_opener:lookup(Key) of
-        {ok, _} = Resp ->
-            couch_stats:increment_counter([ddoc_cache, hit]),
-            Resp;
-        missing ->
-            couch_stats:increment_counter([ddoc_cache, miss]),
-            ddoc_cache_opener:open_doc(DbName, DocId, RevId);
-        recover ->
-            couch_stats:increment_counter([ddoc_cache, recovery]),
-            ddoc_cache_opener:recover_doc(DbName, DocId, RevId)
-    end.
+    ddoc_cache_entry:get({DbName, DocId, RevId}).
 
 
 open_validation_funs(DbName) ->
-    Key = {DbName, custom, validation_funs},
-    case ddoc_cache_opener:lookup(Key) of
-        {ok, _} = Resp ->
-            couch_stats:increment_counter([ddoc_cache, hit]),
-            Resp;
-        missing ->
-            couch_stats:increment_counter([ddoc_cache, miss]),
-            ddoc_cache_opener:open_validation_funs(DbName);
-        recover ->
-            couch_stats:increment_counter([ddoc_cache, recovery]),
-            ddoc_cache_opener:recover_validation_funs(DbName)
-    end.
+    ddoc_cache_entry:get({DbName, custom, validation_funs}).
 
 
 open_custom(DbName, Mod) ->
-    Key = {DbName, custom, Mod},
-    case ddoc_cache_opener:lookup(Key) of
-        {ok, _} = Resp ->
-            couch_stats:increment_counter([ddoc_cache, hit]),
-            Resp;
-        missing ->
-            couch_stats:increment_counter([ddoc_cache, miss]),
-            ddoc_cache_opener:open_custom(DbName, Mod);
-        recover ->
-            couch_stats:increment_counter([ddoc_cache, recovery]),
-            Mod:recover(DbName)
-    end.
+    ddoc_cache_entry:get({DbName, custom, Mod}).
 
 
 evict(ShardDbName, DDocIds) ->

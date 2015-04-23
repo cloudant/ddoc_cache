@@ -17,28 +17,36 @@ start_link() ->
 init([]) ->
     Children = [
         {
-            ddoc_cache_keeper,
-            {ddoc_cache_keeper, start_link, []},
+            ddoc_cache_data,
+            {ddoc_cache_data, start_link, []},
             permanent,
             5000,
             worker,
-            [ddoc_cache_keeper]
+            [ddoc_cache_data]
         },
         {
-            ddoc_cache_fetcher_sup,
-            {ddoc_cache_fetcher_sup, start_link, []},
+            ddoc_cache_monitor,
+            {ddoc_cache_monitor, start_link, []},
+            permanent,
+            5000,
+            worker,
+            [ddoc_cache_monitor]
+        },
+        {
+            ddoc_cache_evictor,
+            {ddoc_cache_evictor, start_link, []},
+            permanent,
+            5000,
+            worker,
+            [ddoc_cache_evictor]
+        },
+        {
+            ddoc_cache_entry_sup,
+            {ddoc_cache_entry_sup, start_link, []},
             permanent,
             5000,
             supervisor,
-            [ddoc_cache_fetcher_sup]
-        },
-        {
-            ddoc_cache_opener,
-            {ddoc_cache_opener, start_link, []},
-            permanent,
-            5000,
-            worker,
-            [ddoc_cache_opener]
+            [ddoc_cache_entry_sup]
         }
     ],
     {ok, {{one_for_one, 5, 10}, Children}}.

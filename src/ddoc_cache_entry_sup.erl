@@ -1,6 +1,6 @@
 % Copyright 2014 Cloudant. All rights reserved.
 
--module(ddoc_cache_fetcher_sup).
+-module(ddoc_cache_entry_sup).
 
 -behaviour(gen_server).
 
@@ -39,13 +39,13 @@ start_link() ->
 
 %% @doc - Starts a child with given Id and Module, Args
 -spec start_child(term()) -> {ok, pid()} | {ok, 'ignore'} | {error, term()}.
-start_child({ChildId, Module, Args}) ->
+start_child({ChildId, {Module, Function, Args}}) ->
     case get_child(ChildId) of
-    not_found ->
-        ChildSpec = {start_child, ChildId, Module, Args},
-        gen_server:call(?MODULE, ChildSpec, ?TIMEOUT);
-    Else ->
-        Else
+        not_found ->
+            ChildSpec = {start_child, ChildId, Module, Function, Args},
+            gen_server:call(?MODULE, ChildSpec, ?TIMEOUT);
+        Else ->
+            Else
     end.
 
 
@@ -106,11 +106,11 @@ terminate(Reason, #state{index = Idx}) ->
     ok.
 
 
-handle_call({start_child, ChildId, Module, Args}, _From, State) ->
+handle_call({start_child, ChildId, Module, Function, Args}, _From, State) ->
     #state{index = Idx} = State,
     case ets:lookup(Idx, ChildId) of
         [] ->
-            ChildSpec = {ChildId, {Module, start_link, Args}},
+            ChildSpec = {ChildId, {Module, Function, Args}},
             Reply = create_child(Idx, ChildSpec),
             {reply, Reply, State};
         [#entry{key = ChildId, pid = Pid}] ->

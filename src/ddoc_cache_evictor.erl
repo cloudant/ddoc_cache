@@ -15,11 +15,9 @@
 -export([
     init/1,
     terminate/2,
-
     handle_call/3,
     handle_cast/2,
     handle_info/2,
-
     code_change/3
 ]).
 
@@ -56,14 +54,14 @@ handle_cast({evict, DbName, DDocIds}, St) ->
     {noreply, St};
 
 handle_cast({do_evict, DbName}, St) ->
-    remove_match_docs({DbName, '_'}),
-    remove_match_docs({DbName, '_', '_'}),
+    ddoc_cache_data:remove_matches({DbName, '_'}),
+    ddoc_cache_data:remove_matches({DbName, '_', '_'}),
     {noreply, St};
 
 handle_cast({do_evict, DbName, DDocIds}, St) ->
-    ?MODULE:remove_match_docs({DbName, custom, '_'}),
+    ddoc_cache_data:remove_matches({DbName, custom, '_'}),
     lists:foreach(fun(DDocId) ->
-        remove_match_docs({DbName, DDocId, '_'}),
+        ddoc_cache_data:remove_matches({DbName, DDocId, '_'}),
         case ddoc_cache_entry_sup:get_child({DbName, DDocId}) of
             {ok, Pid} ->
                 ddoc_cache_entry:refresh(Pid);
@@ -95,11 +93,3 @@ handle_db_event(ShardDbName, deleted, St) ->
 
 handle_db_event(_DbName, _Event, St) ->
     {ok, St}.
-
-
-remove_doc(Key) ->
-    true = ets:delete(?CACHE, Key).
-
-
-remove_match_docs(KeyPattern) ->
-    true = ets:match_delete(?CACHE, #entry{key=KeyPattern, _='_'}).
