@@ -118,17 +118,7 @@ store_doc(Key, Doc) ->
     ok.
 
 
--spec remove_doc(doc_key()) -> ok.
-remove_doc(Key) ->
-    true = ets:delete(?CACHE, Key),
-    ok.
 
-
--spec remove_match_docs(atom() | tuple()) -> ok.
-remove_match_docs(KeyPattern) ->
-    Pattern = #entry{key=KeyPattern, _='_'},
-    true = ets:match_delete(?CACHE, Pattern),
-    ok.
 
 
 %% @doc Returns the latest version of design doc

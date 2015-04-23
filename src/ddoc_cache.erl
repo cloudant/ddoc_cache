@@ -88,7 +88,7 @@ open_custom(DbName, Mod) ->
 
 evict(ShardDbName, DDocIds) ->
     DbName = mem3:dbname(ShardDbName),
-    ddoc_cache_opener:evict_docs(DbName, DDocIds).
+    gen_server:cast(ddoc_cache_evictor, {evict, DbName, DDocIds}).
 
 
 open(DbName, validation_funs) ->
