@@ -11,16 +11,6 @@
 -export([
     start_link/0
 ]).
--export([
-    init/1,
-    terminate/2,
-
-    handle_call/3,
-    handle_cast/2,
-    handle_info/2,
-
-    code_change/3
-]).
 
 -export([
     open_doc/2,
@@ -39,6 +29,18 @@
     recover_doc_info/2,
     recover_validation_funs/1
 ]).
+
+-export([
+    init/1,
+    terminate/2,
+
+    handle_call/3,
+    handle_cast/2,
+    handle_info/2,
+
+    code_change/3
+]).
+
 -export([
     handle_db_event/3
 ]).
@@ -49,32 +51,39 @@
     evictor
 }).
 
+
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 
 -spec open_doc(db_name(), doc_id()) ->
     {ok, #doc{}} | {error, term()}.
 open_doc(DbName, DocId) ->
     ddoc_cache_fetcher:open({DbName, DocId}).
 
+
 -spec open_doc(db_name(), doc_id(), revision()) ->
     {ok, #doc{}} | {error, term()}.
 open_doc(DbName, DocId, Rev) ->
     ddoc_cache_fetcher:open({DbName, DocId, Rev}).
+
 
 -spec open_validation_funs(db_name()) ->
     {ok, [function()]} | {error, term()}.
 open_validation_funs(DbName) ->
     ddoc_cache_fetcher:open({DbName, custom, validation_funs}).
 
+
 -spec open_custom(db_name(), atom()) ->
     {ok, [term()]} | {error, term()}.
 open_custom(DbName, Mod) ->
     ddoc_cache_fetcher:open({DbName, custom, Mod}).
 
+
 -spec evict_docs(db_name(), [doc_id()]) -> ok.
 evict_docs(DbName, DocIds) ->
     gen_server:cast(?MODULE, {evict, DbName, DocIds}).
+
 
 -spec lookup(doc_key()) -> {ok, #doc{} | [term()]} | missing | recover.
 lookup(Key) ->
@@ -90,14 +99,17 @@ lookup(Key) ->
             recover
     end.
 
+
 -spec match(atom() | tuple()) -> [term()].
 match(KeyPattern) ->
     Pattern = #entry{key=KeyPattern, _='_'},
     lists:flatten(ets:match(?CACHE, Pattern)).
 
+
 -spec member(doc_key()) -> boolean().
 member(Key) ->
     ets:member(?CACHE, Key).
+
 
 -spec store_doc(doc_key(), term()) -> ok.
 store_doc(Key, Doc) ->
@@ -105,16 +117,19 @@ store_doc(Key, Doc) ->
     gen_server:cast(?MODULE, maybe_trim_cache),
     ok.
 
+
 -spec remove_doc(doc_key()) -> ok.
 remove_doc(Key) ->
     true = ets:delete(?CACHE, Key),
     ok.
+
 
 -spec remove_match_docs(atom() | tuple()) -> ok.
 remove_match_docs(KeyPattern) ->
     Pattern = #entry{key=KeyPattern, _='_'},
     true = ets:match_delete(?CACHE, Pattern),
     ok.
+
 
 %% @doc Returns the latest version of design doc
 -spec recover_doc(db_name(), doc_id()) ->
@@ -125,6 +140,7 @@ remove_match_docs(KeyPattern) ->
     {error, any(), any()}.
 recover_doc(DbName, DDocId) ->
     fabric:open_doc(DbName, DDocId, []).
+
 
 %% @doc Returns the given revision of design doc
 -spec recover_doc(db_name(), doc_id(), revision()) ->
@@ -137,6 +153,7 @@ recover_doc(DbName, DDocId, Rev) ->
     {ok, [Resp]} = fabric:open_revs(DbName, DDocId, [Rev], []),
     Resp.
 
+
 %% @doc Retrieves an information on a document with a given id
 -spec recover_doc_info(db_name(), doc_id()) ->
     {ok, #doc_info{}} |
@@ -146,6 +163,7 @@ recover_doc(DbName, DDocId, Rev) ->
     {error, any(), any()}.
 recover_doc_info(DbName, DDocId) ->
     fabric:get_doc_info(DbName, DDocId, [{r, "1"}]).
+
 
 %% @doc Returns a list of all the validation funs of the design docs
 %% in a given database
@@ -160,6 +178,7 @@ recover_validation_funs(DbName) ->
     end, DDocs),
     {ok, Funs}.
 
+
 handle_db_event(ShardDbName, created, St) ->
     gen_server:cast(?MODULE, {evict, mem3:dbname(ShardDbName)}),
     {ok, St};
@@ -169,6 +188,7 @@ handle_db_event(ShardDbName, deleted, St) ->
 handle_db_event(_DbName, _Event, St) ->
     {ok, St}.
 
+
 init(_) ->
     process_flag(trap_exit, true),
     {ok, Evictor} = couch_event:link_listener(
@@ -176,12 +196,14 @@ init(_) ->
     ),
     {ok, #st{evictor = Evictor, limiter = get_limiter()}}.
 
+
 terminate(_Reason, St) ->
     case is_pid(St#st.evictor) of
         true -> exit(St#st.evictor, kill);
         false -> ok
     end,
     ok.
+
 
 handle_call({open, OpenerKey}, From, St) ->
     ddoc_cache_fetcher:open(OpenerKey, From),
@@ -224,6 +246,7 @@ handle_cast(maybe_trim_cache, #st{limiter = Limiter} = St) ->
 handle_cast(Msg, St) ->
     {stop, {invalid_cast, Msg}, St}.
 
+
 handle_info({'EXIT', Pid, Reason}, #st{evictor=Pid}=St) ->
     twig:log(err, "ddoc_cache_opener evictor died ~w", [Reason]),
     {ok, Evictor} = couch_event:link_listener(
@@ -234,8 +257,10 @@ handle_info({'EXIT', Pid, Reason}, #st{evictor=Pid}=St) ->
 handle_info(Msg, St) ->
     {stop, {invalid_info, Msg}, St}.
 
+
 code_change(1, #st{evictor=Evictor}, _Extra) ->
     {ok, #st{evictor = Evictor, limiter = get_limiter()}};
+
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -245,35 +270,41 @@ trim_cache(Limiter) ->
     MapFold = fun([Ts,DbName,DDocId,RevNum,RevHash], Dict) ->
         Key = {DbName, DDocId, {RevNum, RevHash}},
         case dict:find({DbName, DDocId}, Dict) of
-        {ok, {N,_} = MaxRev} when N > RevNum ->
-            MaxKey = {DbName, DDocId, MaxRev},
-            {{Ts, Key, MaxKey}, Dict};
-        _ ->
-            MaxRev = {RevNum, RevHash},
-            {{Ts, Key, Key}, dict:store({DbName, DDocId}, MaxRev, Dict)}
+            {ok, {N,_} = MaxRev} when N > RevNum ->
+                MaxKey = {DbName, DDocId, MaxRev},
+                {{Ts, Key, MaxKey}, Dict};
+            _ ->
+                MaxRev = {RevNum, RevHash},
+                {{Ts, Key, Key}, dict:store({DbName, DDocId}, MaxRev, Dict)}
         end
     end,
     {RevKeys, _} = lists:mapfoldl(MapFold, dict:new(),
         ets:match(?CACHE, Pattern)),
     trim_cache(lists:sort(RevKeys), true, Limiter).
 
+
 trim_cache(_, false, _) ->
     ok;
+
 trim_cache([{_, Key, Key}|T], true, Limiter) ->
     {DbName, DDocId, _} = Key,
     remove_doc(Key),
     remove_doc({DbName, DDocId}),
     remove_match_docs({DbName, custom, '_'}),
     trim_cache(T, Limiter(), Limiter);
+
 trim_cache([{_, Key, _}|T], true, Limiter) ->
     remove_doc(Key),
     trim_cache(T, Limiter(), Limiter);
+
 trim_cache(_,_,_) ->
     ok.
+
 
 timestamp() ->
     {Mg,S,M} = os:timestamp(),
     Mg * 1000000 * 1000000 + S * 1000000 + M.
+
 
 get_limiter() ->
     MaxObj = config:get_integer("ddoc_cache", "max_objects", 0),

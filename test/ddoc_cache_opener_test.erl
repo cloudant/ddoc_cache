@@ -2,16 +2,20 @@
 
 -compile([export_all]).
 
+
 -define(NODEBUG, true).
 -define(CACHE, ddoc_cache_lru).
 -define(FABRIC_DELAY, 100).
 -define(DELAY, 1000).
 
+
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("couch/include/couch_db.hrl").
 
+
 -record (cfg, {sup, keeper, opener, stash}).
 -record (ctx, {state = blocked, queue = [], rt = 0, rc = 0}).
+
 
 cache_crud_test_() ->
     {spawn, {setup,
@@ -20,15 +24,18 @@ cache_crud_test_() ->
         fun cache_tests_builder/1
     }}.
 
+
 cache_setup() ->
     meck:new([config]),
     mock_config(0, 104857600),
     {ok, KeeperPid, SupPid, OpenerPid} = start_opener(),
     #cfg{sup = SupPid, keeper = KeeperPid, opener = OpenerPid}.
 
+
 cache_teardown(#cfg{sup = SupPid, keeper = KeeperPid, opener = OpenerPid}) ->
     stop_opener(KeeperPid, SupPid, OpenerPid),
     meck:unload([config]).
+
 
 cache_tests_builder(_Cfg) ->
     [
@@ -41,8 +48,10 @@ cache_tests_builder(_Cfg) ->
         {"remove matched docs", ?_test(assertCanMatchRemove())}
     ].
 
+
 assertCacheCreated() ->
     ets:info(?CACHE, size) =:= 0.
+
 
 assertCanStore() ->
     Keys = [
@@ -60,6 +69,7 @@ assertCanStore() ->
     (length(Results) =:= length(Keys))
         and lists:all(fun(R) -> R =:= ok end, Results).
 
+
 assertCanLookup() ->
     A = ddoc_cache_opener:lookup({a, a}),
     B = ddoc_cache_opener:lookup({a, custom, validation}),
@@ -68,6 +78,7 @@ assertCanLookup() ->
     E = ddoc_cache_opener:lookup({a, z}),
     {A, B, C, D, E} =:= {{ok, 1}, {ok, 2}, {ok, 5}, {ok, 6}, missing}.
 
+
 assertCanCheckExistance() ->
     A = ddoc_cache_opener:member({a, a}),
     B = ddoc_cache_opener:member({a, z}),
@@ -75,17 +86,20 @@ assertCanCheckExistance() ->
     D = ddoc_cache_opener:member({a, a, {2, b}}),
     {A, B, C, D} =:= {true, false, false, true}.
 
+
 assertCanMatch() ->
     A = ddoc_cache_opener:match({a, '_'}),
     B = ddoc_cache_opener:match({a, '_', '_'}),
     C = ddoc_cache_opener:match({a, custom, '_'}),
     (length(A) =:= 2) and (length(B) =:= 7) and (length(C) =:= 1).
 
+
 assertCanRemove() ->
     A = ddoc_cache_opener:lookup({a, a, {1, a}}),
     B = ddoc_cache_opener:remove_doc({a, a, {1, a}}),
     C = ddoc_cache_opener:lookup({a, a, {1, a}}),
     {A, B, C} =:= {5, ok, missing}.
+
 
 assertCanMatchRemove() ->
     A = ddoc_cache_opener:match({a, custom, '_'}),
@@ -105,15 +119,18 @@ lru_test_() ->
         fun lru_tests_builder/1
     }}.
 
+
 lru_setup() ->
     meck:new([config]),
     mock_config(10, 2000),
     {ok, KeeperPid, SupPid, OpenerPid} = start_opener(),
     #cfg{sup = SupPid, keeper = KeeperPid, opener = OpenerPid}.
 
+
 lru_teardown(#cfg{sup = SupPid, keeper = KeeperPid, opener = OpenerPid}) ->
     stop_opener(KeeperPid, SupPid, OpenerPid),
     meck:unload([config]).
+
 
 lru_tests_builder(_Cfg) ->
     [
@@ -124,15 +141,18 @@ lru_tests_builder(_Cfg) ->
         {"recently touched kept", ?_test(assertRecentKept())}
     ].
 
+
 assertDocsCount() ->
     Size = ets:info(?CACHE, size),
     ?debugVal(Size),
     Size =< 10.
 
+
 assertCacheSize() ->
     Memory = ets:info(?CACHE, memory),
     ?debugVal(Memory),
     Memory =< 2000.
+
 
 assertRecentKept() ->
     Result = lists:map(fun(I) ->
@@ -151,6 +171,7 @@ fetch_test_() ->
         fun fetch_tests_builder/1
     }}.
 
+
 fetch_setup() ->
     {ok, KeeperPid, SupPid, OpenerPid} = start_opener(),
     StashPid = spawn(?MODULE, stash, [#ctx{}]),
@@ -166,16 +187,20 @@ fetch_setup() ->
     meck:expect(mem3, nodes, fun() ->
         Pid = self(),
         StashPid ! {q, Pid},
-        receive {a, Pid} -> [node()]
-        after infinity -> ok
+        receive
+            {a, Pid} -> [node()]
+        after
+            infinity -> ok
         end
     end),
     #cfg{sup=SupPid, keeper=KeeperPid, opener=OpenerPid, stash=StashPid}.
+
 
 fetch_teardown(#cfg{sup=Sup, keeper=Keeper, opener=Opener, stash=Stash}) ->
     stop_opener(Keeper, Sup, Opener),
     Stash ! done,
     meck:unload([mem3, fabric]).
+
 
 fetch_tests_builder(Cfg) ->
     [
@@ -192,17 +217,18 @@ fetch_tests_builder(Cfg) ->
         {"confirm there was no delay", ?_assert(assertResponseDelayed(Cfg))}
     ].
 
-%% assertions
 
 assertQueueFlooded(#cfg{opener = Pid}) ->
     {_, Q} = erlang:process_info(Pid, message_queue_len),
     ?debugVal(Q),
     Q >= 10.
 
+
 assertQueueDry(#cfg{opener = Pid}) ->
     {_, Q} = erlang:process_info(Pid, message_queue_len),
     ?debugVal(Q),
     Q < 10.
+
 
 assertFetcherQueueDry() ->
     Count = ddoc_cache_fetcher_sup:count_children(),
@@ -218,14 +244,17 @@ assertFetcherQueueDry() ->
     ?debugVal(Q),
     Q =:= 0.
 
+
 assertResponsePassed(#cfg{stash = StashPid}) ->
     StashPid ! {get_time, self()},
     receive
         {rtime, _, ClientsCount} ->
             ?debugVal(ClientsCount),
             ClientsCount =:= 100
-    after 1000 -> throw({stash, timeout})
+    after
+        1000 -> throw({stash, timeout})
     end.
+
 
 assertResponseDelayed(#cfg{stash = StashPid}) ->
     StashPid ! {get_time, self()},
@@ -233,10 +262,10 @@ assertResponseDelayed(#cfg{stash = StashPid}) ->
         {rtime, Time, _} ->
             ?debugVal(Time),
             Time < ?DELAY andalso Time < 2 * ?FABRIC_DELAY
-    after 1000 -> throw({stash, timeout})
+    after
+        1000 -> throw({stash, timeout})
     end.
 
-%% fixtures and helpers
 
 mock_config(Count, Size) ->
     meck:expect(config, get_integer, fun
@@ -244,12 +273,14 @@ mock_config(Count, Size) ->
         (_, "max_size", _) -> Size
     end).
 
+
 start_opener() ->
     process_flag(trap_exit, true),
     {ok, KeeperPid} = ddoc_cache_keeper:start_link(),
     {ok, SupPid} = ddoc_cache_fetcher_sup:start_link(),
     {ok, OpenerPid} = ddoc_cache_opener:start_link(),
     {ok, KeeperPid, SupPid, OpenerPid}.
+
 
 stop_opener(KeeperPid, SupPid, OpenerPid) ->
     lists:foreach(fun(Pid) ->
@@ -260,6 +291,7 @@ stop_opener(KeeperPid, SupPid, OpenerPid) ->
             exit({kill_timeout, Pid})
         end
     end, [OpenerPid, SupPid, KeeperPid]).
+
 
 generate_ddocs(N) ->
     Keeper = fun() ->
@@ -275,6 +307,7 @@ generate_ddocs(N) ->
     end, lists:seq(1, N)),
     true.
 
+
 mass_ask_for_ddoc(#cfg{stash = StashPid}) ->
     lists:foreach(fun(_) ->
         %% spawing because it is blocking
@@ -286,14 +319,17 @@ mass_ask_for_ddoc(#cfg{stash = StashPid}) ->
     end, lists:seq(1, 100)),
     true.
 
+
 flood_queue(#cfg{opener = OpenerPid}) ->
     lists:foreach(fun(_) ->
         ok = gen_server:cast(OpenerPid, {evict, <<"two">>})
     end, lists:seq(1,100)).
 
+
 drain_queue(#cfg{stash = StashPid}) ->
     StashPid ! unblock,
     timer:sleep(5).
+
 
 stash(#ctx{queue = Q} = Ctx) ->
     receive

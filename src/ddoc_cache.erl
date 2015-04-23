@@ -17,11 +17,14 @@
     open/2
 ]).
 
+
 start() ->
     application:start(ddoc_cache).
 
+
 stop() ->
     application:stop(ddoc_cache).
+
 
 open_doc(DbName, DocId) ->
     Key = {DbName, DocId},
@@ -37,6 +40,7 @@ open_doc(DbName, DocId) ->
             ddoc_cache_opener:recover_doc(DbName, DocId)
     end.
 
+
 open_doc(DbName, DocId, RevId) ->
     Key = {DbName, DocId, RevId},
     case ddoc_cache_opener:lookup(Key) of
@@ -50,6 +54,7 @@ open_doc(DbName, DocId, RevId) ->
             couch_stats:increment_counter([ddoc_cache, recovery]),
             ddoc_cache_opener:recover_doc(DbName, DocId, RevId)
     end.
+
 
 open_validation_funs(DbName) ->
     Key = {DbName, custom, validation_funs},
@@ -65,6 +70,7 @@ open_validation_funs(DbName) ->
             ddoc_cache_opener:recover_validation_funs(DbName)
     end.
 
+
 open_custom(DbName, Mod) ->
     Key = {DbName, custom, Mod},
     case ddoc_cache_opener:lookup(Key) of
@@ -79,9 +85,11 @@ open_custom(DbName, Mod) ->
             Mod:recover(DbName)
     end.
 
+
 evict(ShardDbName, DDocIds) ->
     DbName = mem3:dbname(ShardDbName),
     ddoc_cache_opener:evict_docs(DbName, DDocIds).
+
 
 open(DbName, validation_funs) ->
     open_validation_funs(DbName);

@@ -4,21 +4,38 @@
 
 -behaviour(gen_server).
 
--export([start_link/0, start_child/1, get_child/1, terminate_child/1,
-    which_children/0, count_children/0]).
-%% gen_server's callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-    terminate/2, code_change/3]).
+
+-export([
+    start_link/0,
+    start_child/1,
+    get_child/1,
+    terminate_child/1,
+    which_children/0,
+    count_children/0
+]).
+
+-export([
+    init/1,
+    handle_call/3,
+    handle_cast/2,
+    handle_info/2,
+    terminate/2,
+    code_change/3
+]).
+
 
 -define(TIMEOUT, 10000).
 -define(WAIT, 5000).
 
+
 -record(entry, {key, pid}).
 -record(state, {index}).
+
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 
 %% @doc - Starts a child with given Id and Module, Args
 -spec start_child(term()) -> {ok, pid()} | {ok, 'ignore'} | {error, term()}.
@@ -30,6 +47,7 @@ start_child({ChildId, Module, Args}) ->
     Else ->
         Else
     end.
+
 
 %% @doc - Get a pid of a child with a given Id
 -spec get_child(term()) -> {ok, pid()} | not_found | {error, term()}.
@@ -44,6 +62,7 @@ get_child(ChildId) ->
             {error, {?MODULE, not_running}}
     end.
 
+
 %% @doc - Kills the child with a given id
 -spec terminate_child(term()) -> ok | {error, term()}.
 terminate_child(ChildId) ->
@@ -53,6 +72,7 @@ terminate_child(ChildId) ->
     catch
         error:badarg -> {error, {?MODULE, not_running}}
     end.
+
 
 %% @doc - Returns a list of key, pid pairs for all active children
 -spec which_children() -> [{term(), pid()}].
@@ -64,12 +84,13 @@ which_children() ->
         error:badarg -> {error, {?MODULE, not_running}}
     end.
 
+
 %% @doc - Returns a number of active children
 -spec count_children() -> non_neg_integer().
 count_children() ->
     case ets:info(?MODULE, size) of
-    undefined -> 0;
-    N -> N
+        undefined -> 0;
+        N -> N
     end.
 
 
@@ -78,93 +99,104 @@ init([]) ->
     Idx = ets:new(?MODULE, [named_table, public, {keypos, #entry.key}]),
     {ok, #state{index = Idx}}.
 
-handle_call({start_child, ChildId, Module, Args}, _From, State) ->
-    #state{index = Idx} = State,
-    case ets:lookup(Idx, ChildId) of
-    [] ->
-        ChildSpec = {ChildId, {Module, start_link, Args}},
-        Reply = create_child(Idx, ChildSpec),
-        {reply, Reply, State};
-    [#entry{key = ChildId, pid = Pid}] ->
-        {reply, {ok, Pid}, State}
-  end;
-handle_call({terminate_child, ChildId}, _From, State) ->
-    #state{index = Idx} = State,
-    case ets:lookup(Idx, ChildId) of
-    [Child] -> shutdown_child(Idx, Child, shutdown);
-    [] -> ok
-    end,
-    {reply, ok, State};
-handle_call(Call, _From, State) ->
-    {stop, {unknown_call, Call}, State}.
-
-handle_cast(Cast, State) ->
-    {stop, {unknown_cast, Cast}, State}.
-
-handle_info({'EXIT', Pid, _Reason}, #state{index = Idx} = State) ->
-    ets:match_delete(Idx, #entry{pid = Pid, _='_'}),
-    {noreply, State};
-handle_info(_Msg, State) ->
-    {noreply, State}.
 
 terminate(Reason, #state{index = Idx}) ->
     [shutdown_child(Idx, Child, Reason) || Child <- ets:tab2list(Idx)],
     ets:delete(Idx),
     ok.
 
+
+handle_call({start_child, ChildId, Module, Args}, _From, State) ->
+    #state{index = Idx} = State,
+    case ets:lookup(Idx, ChildId) of
+        [] ->
+            ChildSpec = {ChildId, {Module, start_link, Args}},
+            Reply = create_child(Idx, ChildSpec),
+            {reply, Reply, State};
+        [#entry{key = ChildId, pid = Pid}] ->
+            {reply, {ok, Pid}, State}
+  end;
+
+handle_call({terminate_child, ChildId}, _From, State) ->
+    #state{index = Idx} = State,
+    case ets:lookup(Idx, ChildId) of
+        [Child] -> shutdown_child(Idx, Child, shutdown);
+        [] -> ok
+    end,
+    {reply, ok, State};
+
+handle_call(Call, _From, State) ->
+    {stop, {unknown_call, Call}, State}.
+
+
+handle_cast(Cast, State) ->
+    {stop, {unknown_cast, Cast}, State}.
+
+
+handle_info({'EXIT', Pid, _Reason}, #state{index = Idx} = State) ->
+    ets:match_delete(Idx, #entry{pid = Pid, _='_'}),
+    {noreply, State};
+
+handle_info(_Msg, State) ->
+    {noreply, State}.
+
+
 code_change(_, State, _) ->
     {ok, State}.
 
+
 create_child(Idx, {ChildId, {M,F,A}}) ->
     case catch apply(M, F, A) of
-    {ok, Pid} when is_pid(Pid) ->
-        case erlang:is_process_alive(Pid) of
-        true ->
-            ets:insert(Idx, #entry{key = ChildId, pid = Pid}),
-            {ok, Pid};
-        false ->
-            {ok, Pid}
-        end;
-    ignore ->
-        {ok, ignore};
-    {error, Err} ->
-        {error, Err};
-    Err ->
-        {error, Err}
+        {ok, Pid} when is_pid(Pid) ->
+            case erlang:is_process_alive(Pid) of
+                true ->
+                    ets:insert(Idx, #entry{key = ChildId, pid = Pid}),
+                    {ok, Pid};
+                false ->
+                    {ok, Pid}
+            end;
+        ignore ->
+            {ok, ignore};
+        {error, Err} ->
+            {error, Err};
+        Err ->
+            {error, Err}
     end.
+
 
 shutdown_child(Idx, #entry{key = ChildId, pid = Pid}, Reason) ->
     ets:delete(Idx, ChildId),
     case monitor_child(Pid) of
-    ok ->
-        exit(Pid, Reason),
-        receive
-        {'DOWN', _MRef, process, Pid, Reason} ->
-            ok;
-        {'DOWN', _MRef, process, Pid, OtherReason} ->
-            {error, OtherReason}
-        after ?WAIT ->
-            exit(Pid, kill),
+        ok ->
+            exit(Pid, Reason),
             receive
-            {'DOWN', _MRef, process, Pid, killed} ->
-                ok;
-            {'DOWN', _MRef, process, Pid, OtherReason} ->
-                {error, OtherReason}
-            end
-        end;
-    {error, Err} ->
-        {error, Err}
+                {'DOWN', _MRef, process, Pid, Reason} ->
+                    ok;
+                {'DOWN', _MRef, process, Pid, OtherReason} ->
+                    {error, OtherReason}
+            after ?WAIT ->
+                exit(Pid, kill),
+                receive
+                    {'DOWN', _MRef, process, Pid, killed} ->
+                        ok;
+                    {'DOWN', _MRef, process, Pid, OtherReason} ->
+                        {error, OtherReason}
+                end
+            end;
+        {error, Err} ->
+            {error, Err}
     end.
+
 
 monitor_child(Pid) ->
     erlang:monitor(process, Pid),
     unlink(Pid),
     receive
-    {'EXIT', Pid, Reason} ->
-        receive
-        {'DOWN', _, process, Pid, _} ->
-            {error, Reason}
-        end
+        {'EXIT', Pid, Reason} ->
+            receive
+                {'DOWN', _, process, Pid, _} ->
+                    {error, Reason}
+            end
     after 0 ->
         ok
     end.
