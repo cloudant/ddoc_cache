@@ -61,13 +61,8 @@ handle_cast({do_evict, DbName}, St) ->
 handle_cast({do_evict, DbName, DDocIds}, St) ->
     ddoc_cache_data:remove_matches({DbName, custom, '_'}),
     lists:foreach(fun(DDocId) ->
-        ddoc_cache_data:remove_matches({DbName, DDocId, '_'}),
-        case ddoc_cache_entry_sup:get_child({DbName, DDocId}) of
-            {ok, Pid} ->
-                ddoc_cache_entry:refresh(Pid);
-            _ ->
-                ok
-        end
+        ddoc_cache_data:remove_matches({DbName, DDocId}),
+        ddoc_cache_data:remove_matches({DbName, DDocId, '_'})
     end, DDocIds),
     {noreply, St};
 
