@@ -86,7 +86,6 @@ init(Key) ->
     receive
         {'DOWN', Ref, process, Pid, {ok, Val}} ->
             ddoc_cache_data:store(Key, Val),
-            ddoc_cache_monitor:register(Key),
             gen_server:enter_loop(?MODULE, [], #st{key = Key});
         {'DOWN', Ref, process, Pid, Error} ->
             exit(Error)
