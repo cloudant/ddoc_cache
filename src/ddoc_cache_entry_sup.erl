@@ -28,7 +28,7 @@
 -define(WAIT, 5000).
 
 
--record(entry, {key, pid}).
+-record(entry, {key, pid, cleanup}).
 -record(state, {index}).
 
 
@@ -39,10 +39,20 @@ start_link() ->
 
 %% @doc - Starts a child with given Id and Module, Args
 -spec start_child(term()) -> {ok, pid()} | {ok, 'ignore'} | {error, term()}.
-start_child({ChildId, {Module, Function, Args}}) ->
+start_child(ChildSpec) ->
+    start_child(ChildSpec, []).
+
+
+%% @doc - Starts a child with given Id and Module, Args
+-spec start_child(term(), [any()]) ->
+    {ok, pid()} |
+    {ok, 'ignore'} |
+    {error, term()}.
+start_child({ChildID, MFA}, Options) ->
+    check_options(Options),
     case get_child(ChildId) of
         not_found ->
-            ChildSpec = {start_child, ChildId, Module, Function, Args},
+            Msg = {start_child, ChildId, MFA, Options},
             gen_server:call(?MODULE, ChildSpec, ?TIMEOUT);
         Else ->
             Else
@@ -106,12 +116,11 @@ terminate(Reason, #state{index = Idx}) ->
     ok.
 
 
-handle_call({start_child, ChildId, Module, Function, Args}, _From, State) ->
+handle_call({start_child, ChildId, MFA, Options}, _From, State) ->
     #state{index = Idx} = State,
     case ets:lookup(Idx, ChildId) of
         [] ->
-            ChildSpec = {ChildId, {Module, Function, Args}},
-            Reply = create_child(Idx, ChildSpec),
+            Reply = create_child(Idx, {ChildId, MFA}, Options),
             {reply, Reply, State};
         [#entry{key = ChildId, pid = Pid}] ->
             {reply, {ok, Pid}, State}
@@ -134,7 +143,13 @@ handle_cast(Cast, State) ->
 
 
 handle_info({'EXIT', Pid, _Reason}, #state{index = Idx} = State) ->
-    ets:match_delete(Idx, #entry{pid = Pid, _='_'}),
+    case ets:match_object(Idx, #entry{pid = Pid, _='_'}) of
+        [#entry{key = Key} = Entry] ->
+            ets:delete(Idx, Key),
+            maybe_cleanup(Entry);
+        [] ->
+            ok
+    end,
     {noreply, State};
 
 handle_info(_Msg, State) ->
@@ -145,12 +160,12 @@ code_change(_, State, _) ->
     {ok, State}.
 
 
-create_child(Idx, {ChildId, {M,F,A}}) ->
+create_child(Idx, {ChildId, {M, F, A}}, Options) ->
     case catch apply(M, F, A) of
         {ok, Pid} when is_pid(Pid) ->
             case erlang:is_process_alive(Pid) of
                 true ->
-                    ets:insert(Idx, #entry{key = ChildId, pid = Pid}),
+                    ets:insert(Idx, make_entry(ChildId, Pid, Options)),
                     {ok, Pid};
                 false ->
                     {ok, Pid}
@@ -164,7 +179,27 @@ create_child(Idx, {ChildId, {M,F,A}}) ->
     end.
 
 
-shutdown_child(Idx, #entry{key = ChildId, pid = Pid}, Reason) ->
+make_entry(ChildId, Pid, Options) ->
+    Cleanup = case proplists:get_value(cleanup, Options) of
+        {cleanup, CU} -> CU;
+        undefined -> undefined
+    end,
+    #entry{
+        key = ChildId,
+        pid = Pid,
+        cleanup = Cleanup
+    }.
+
+
+shutdown_child(Idx, Entry, Reason) ->
+    try
+        shutdown_child_int(Idx, Entry, Reason),
+    after
+        maybe_cleanup(Entry)
+    end.
+
+
+shutdown_child_int(Idx, #entry{key = ChildId, pid = Pid}, Reason) ->
     ets:delete(Idx, ChildId),
     case monitor_child(Pid) of
         ok ->
@@ -188,6 +223,17 @@ shutdown_child(Idx, #entry{key = ChildId, pid = Pid}, Reason) ->
     end.
 
 
+maybe_cleanup(#entry{key = Key, pid = Pid, cleanup = {M, F, A}}) ->
+    try
+        erlang:apply(M, F, [Key, Pid | A]),
+        ok
+    catch _:_ ->
+        ok
+    end;
+maybe_cleanup(_) ->
+    ok.
+
+
 monitor_child(Pid) ->
     erlang:monitor(process, Pid),
     unlink(Pid),
@@ -200,3 +246,14 @@ monitor_child(Pid) ->
     after 0 ->
         ok
     end.
+
+
+check_options(Options) ->
+    case proplists:get_value(cleanup, Options) of
+        {cleanup, {M, F, A}} when is_atom(M), is_atom(F), is_list(A) ->
+            ok;
+        {cleanup, Else} ->
+            erlang:error({badarg, {cleanup, Else}})
+    end.
+
+

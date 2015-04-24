@@ -24,6 +24,10 @@
     code_change/3
 ]).
 
+-export([
+    cleanup/2
+]).
+
 
 -include("ddoc_cache.hrl").
 -include_lib("couch/include/couch_db.hrl").
@@ -41,7 +45,8 @@ get(Key) ->
         % create_child will return an existing child for
         % Key if one exists.
         MFA = {proc_lib, start_link, [?MODULE, init, [Key]]},
-        {ok, Pid} = ddoc_cache_entry_sup:create_child(Key, MFA),
+        Opts = [{cleanup, {?MODULE, cleanup, []}}],
+        {ok, Pid} = ddoc_cache_entry_sup:create_child({Key, MFA}, Opts),
         case ddoc_cache_data:lookup(Key) of
             {ok, _} = Resp ->
                 couch_stats:increment_counter([ddoc_cache, hit]),
@@ -119,3 +124,7 @@ handle_info(Msg, State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+
+cleanup(Key, _Pid) ->
+    ddoc_cache_data:remove(Key).
