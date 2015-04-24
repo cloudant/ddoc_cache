@@ -3,6 +3,7 @@
 -module(ddoc_cache_keeper).
 
 -behaviour(gen_server).
+-behaviour(config_listener).
 -vsn(1).
 
 
@@ -25,6 +26,10 @@
     handle_cast/2,
     handle_info/2,
     code_change/3
+]).
+
+-export([
+    handle_config_change/5
 ]).
 
 
@@ -74,6 +79,7 @@ start_link() ->
 
 init([]) ->
     ets:new(?CACHE, [set, named_table, public, {keypos, #entry.key}]),
+    ok = config:listen_for_changes(?MODULE, nil),
     {ok, ok, hibernate}.
 
 
@@ -96,3 +102,18 @@ handle_info(_, State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+
+handle_config_change("ddoc_cache", _, _, _, St) ->
+    Msg = [
+        {max_objects, config:get_integer("ddoc_cache", "max_objects", 0)},
+        {max_memory, config:get_integer("ddoc_cache", "max_memory", 104857600)},
+        {timeout, config:get_integer("ddoc_cache", "timeout", 60000)}
+    ],
+    lists:foreach(fun({_ChildId, Pid}) ->
+        gen_server:cast(Pid, {config, Msg})
+    end, ddoc_cache_entry_sup:which_children()),
+    {ok, St};
+
+handle_config_change(_, _, _, _, St)
+    {ok, St}.

@@ -25,7 +25,8 @@
 ]).
 
 -export([
-    cleanup/2
+    cleanup/2,
+    refresh/2
 ]).
 
 
@@ -35,6 +36,8 @@
 
 -record(st, {
     key,
+    max_objects = 0,
+    max_memory = 104857600,
     timeout = 60000
 }).
 
@@ -105,17 +108,30 @@ handle_call(Msg, _, St) ->
 handle_cast(accessed, St) ->
     {noreply, St, St#st.timeout};
 
-handle_cast({set_timeout, TimeOut}, St) ->
-    {noreply, St#st{timeout=TimeOut}, TimeOut};
+handle_cast({config, Config}, St) ->
+    NewSt = lists:foldl(fun
+        ({max_objects, MaxObj}, Acc) ->
+            Acc#st{max_objects = MaxObj};
+        ({max_memory, MaxMem}, Acc) ->
+            Acc#st{max_memory = MaxMem};
+        ({timeout, TimeOut}, Acc) ->
+            Acc#st{timeout = TimeOut}
+        (_Else, Acc) ->
+            Acc
+    end, St, Config)
+    {noreply, NewSt, NewSt#st.timeout};
 
 handle_cast(Msg, St) ->
     {stop, {invalid_cast, Msg}, St}.
 
 
 handle_info(timeout, St) ->
-    case ddoc_cache_monitor:should_close() of
-        true -> {stop, St};
-        false -> {noreply, St, St#st.timeout}
+    case should_close(St) of
+        true ->
+            {stop, St};
+        false ->
+            NewSt = maybe_refresh(St),
+            {noreply, NewSt, NewSt#st.timeout}
     end;
 
 handle_info(Msg, State) ->
@@ -128,3 +144,27 @@ code_change(_OldVsn, State, _Extra) ->
 
 cleanup(Key, _Pid) ->
     ddoc_cache_data:remove(Key).
+
+
+should_close(St) ->
+    #st{max_objects = MaxObj, max_memory = MaxMem} = St,
+    ObjExceeded = MaxObj > 0 andalso ets:info(?CACHE, size) > MaxObj,
+    MemExceeded = ets:info(?CACHE, memory) > MaxMem,
+    ObjExceeded orelse MemExceeded.
+
+
+maybe_refresh(#st{key = {DbName, DocId}} = St) ->
+    proc_lib:spawn_link(?MODULE, refresh, [{DbName, DocId}, self()]);
+    St;
+
+maybe_refresh(St) ->
+    St.
+
+
+refresh(Key, Server) ->
+    case ddoc_cache_util:open(Key) of
+        {ok, _} = Resp ->
+            gen_server:cast(Server, Resp);
+        Error ->
+            exit(Error)
+    end.

@@ -53,7 +53,7 @@ start_child({ChildID, MFA}, Options) ->
     case get_child(ChildId) of
         not_found ->
             Msg = {start_child, ChildId, MFA, Options},
-            gen_server:call(?MODULE, ChildSpec, ?TIMEOUT);
+            gen_server:call(?MODULE, Msg, ?TIMEOUT);
         Else ->
             Else
     end.
@@ -253,7 +253,9 @@ check_options(Options) ->
         {cleanup, {M, F, A}} when is_atom(M), is_atom(F), is_list(A) ->
             ok;
         {cleanup, Else} ->
-            erlang:error({badarg, {cleanup, Else}})
+            erlang:error({badarg, {cleanup, Else}});
+        undefined ->
+            ok
     end.
 
 
